@@ -68,16 +68,18 @@ jobs:
             '{
               dashboard: $dash,
               overwrite: true,
-              inputs: [{"name":"DS_TESTDATA","type":"datasource","pluginId":"testdata","value":"grafana-testdata-datasource"}],
-              folderUid: $folder_uid,
+              folderUid: ($folder_uid | if . == "" then null else . end),
               message: $msg
             }')
           echo "Pushing dashboard to ${GRAFANA_URL} ..."
-          curl -sf -X POST \
+          curl -sS -X POST \
             -H "Authorization: Bearer ${GRAFANA_TOKEN}" \
             -H "Content-Type: application/json" \
             -d "$PAYLOAD" \
-            "${GRAFANA_URL}/api/dashboards/import"
+            "${GRAFANA_URL}/api/dashboards/db" \
+            -o /tmp/grafana-response.json
+          cat /tmp/grafana-response.json
+          echo ""
           echo "Dashboard pushed successfully — refresh Grafana to see updated metrics"
 
       - name: Upload Grafana Dashboard Artifact
