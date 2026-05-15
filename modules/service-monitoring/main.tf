@@ -139,7 +139,7 @@ locals {
   # ── Row 1: SLO gauges and error budget ─────────────────────────────────────
 
   _slo_panel_jsons = [for idx, s in local.service_reliability : jsonencode({
-    datasource = { type = "testdata", uid = "$${DS_TESTDATA}" }
+    datasource = { type = "testdata", uid = "grafana-testdata-datasource" }
     fieldConfig = {
       defaults = {
         color = { mode = "thresholds" }
@@ -168,7 +168,7 @@ locals {
     targets = [{
       alias      = "SLO %"
       csvContent = "Time,Value\n2024-01-01T00:00:00Z,${s.slo_target}"
-      datasource = { type = "testdata", uid = "$${DS_TESTDATA}" }
+      datasource = { type = "testdata", uid = "grafana-testdata-datasource" }
       refId      = "A"
       scenarioId = "csv_content"
     }]
@@ -177,7 +177,7 @@ locals {
   })]
 
   _budget_panel_jsons = [for idx, s in local.service_reliability : jsonencode({
-    datasource = { type = "testdata", uid = "$${DS_TESTDATA}" }
+    datasource = { type = "testdata", uid = "grafana-testdata-datasource" }
     fieldConfig = {
       defaults = {
         color = { mode = "thresholds" }
@@ -206,7 +206,7 @@ locals {
     targets = [{
       alias      = "mins/month"
       csvContent = "Time,Value\n2024-01-01T00:00:00Z,${s.error_budget_minutes}"
-      datasource = { type = "testdata", uid = "$${DS_TESTDATA}" }
+      datasource = { type = "testdata", uid = "grafana-testdata-datasource" }
       refId      = "A"
       scenarioId = "csv_content"
     }]
@@ -219,7 +219,7 @@ locals {
   # status reflects whether the current snapshot is within SLO.
 
   _live_latency_panel_jsons = [for idx, s in local.service_reliability : jsonencode({
-    datasource = { type = "testdata", uid = "$${DS_TESTDATA}" }
+    datasource = { type = "testdata", uid = "grafana-testdata-datasource" }
     fieldConfig = {
       defaults = {
         color = { mode = "thresholds" }
@@ -248,7 +248,7 @@ locals {
     targets = [{
       alias      = "current ms"
       csvContent = "Time,Value\n2024-01-01T00:00:00Z,${s.current_latency_ms}"
-      datasource = { type = "testdata", uid = "$${DS_TESTDATA}" }
+      datasource = { type = "testdata", uid = "grafana-testdata-datasource" }
       refId      = "A"
       scenarioId = "csv_content"
     }]
@@ -257,7 +257,7 @@ locals {
   })]
 
   _live_errorrate_panel_jsons = [for idx, s in local.service_reliability : jsonencode({
-    datasource = { type = "testdata", uid = "$${DS_TESTDATA}" }
+    datasource = { type = "testdata", uid = "grafana-testdata-datasource" }
     fieldConfig = {
       defaults = {
         color = { mode = "thresholds" }
@@ -286,7 +286,7 @@ locals {
     targets = [{
       alias      = "error %"
       csvContent = "Time,Value\n2024-01-01T00:00:00Z,${s.current_error_pct}"
-      datasource = { type = "testdata", uid = "$${DS_TESTDATA}" }
+      datasource = { type = "testdata", uid = "grafana-testdata-datasource" }
       refId      = "A"
       scenarioId = "csv_content"
     }]
@@ -295,7 +295,7 @@ locals {
   })]
 
   _live_tps_panel_jsons = [for idx, s in local.service_reliability : jsonencode({
-    datasource = { type = "testdata", uid = "$${DS_TESTDATA}" }
+    datasource = { type = "testdata", uid = "grafana-testdata-datasource" }
     fieldConfig = {
       defaults = {
         color = { mode = "thresholds" }
@@ -324,7 +324,7 @@ locals {
     targets = [{
       alias      = "TPS"
       csvContent = "Time,Value\n2024-01-01T00:00:00Z,${s.current_tps}"
-      datasource = { type = "testdata", uid = "$${DS_TESTDATA}" }
+      datasource = { type = "testdata", uid = "grafana-testdata-datasource" }
       refId      = "A"
       scenarioId = "csv_content"
     }]
@@ -335,7 +335,7 @@ locals {
   # ── Row 3: Configured Thresholds ───────────────────────────────────────────
 
   _latency_panel_jsons = [for idx, s in local.service_reliability : jsonencode({
-    datasource = { type = "testdata", uid = "$${DS_TESTDATA}" }
+    datasource = { type = "testdata", uid = "grafana-testdata-datasource" }
     fieldConfig = {
       defaults = {
         color = { mode = "thresholds" }
@@ -364,7 +364,7 @@ locals {
     targets = [{
       alias      = "ms"
       csvContent = "Time,Value\n2024-01-01T00:00:00Z,${s.latency_threshold_ms}"
-      datasource = { type = "testdata", uid = "$${DS_TESTDATA}" }
+      datasource = { type = "testdata", uid = "grafana-testdata-datasource" }
       refId      = "A"
       scenarioId = "csv_content"
     }]
@@ -373,7 +373,7 @@ locals {
   })]
 
   _errorrate_panel_jsons = [for idx, s in local.service_reliability : jsonencode({
-    datasource = { type = "testdata", uid = "$${DS_TESTDATA}" }
+    datasource = { type = "testdata", uid = "grafana-testdata-datasource" }
     fieldConfig = {
       defaults = {
         color = { mode = "thresholds" }
@@ -402,7 +402,7 @@ locals {
     targets = [{
       alias      = "error %"
       csvContent = "Time,Value\n2024-01-01T00:00:00Z,${s.error_rate_threshold_pct}"
-      datasource = { type = "testdata", uid = "$${DS_TESTDATA}" }
+      datasource = { type = "testdata", uid = "grafana-testdata-datasource" }
       refId      = "A"
       scenarioId = "csv_content"
     }]
