@@ -16,3 +16,12 @@ output "service_reliability" {
   description = "Per-service reliability metrics: SLO target, error budget, and max allowable downtime"
   value       = module.service_monitoring.service_reliability
 }
+
+output "simulated_metrics_summary" {
+  description = "Simulated current metric snapshot used in the Live Snapshot dashboard row — changes each CI run"
+  value = { for m in local.simulated_metrics : m.service_name => {
+    current_latency_ms = m.current_latency_ms
+    current_error_pct  = m.current_error_pct
+    current_tps        = m.current_tps
+  } }
+}

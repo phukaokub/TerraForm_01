@@ -43,7 +43,42 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Terraform Apply (dev)
+        env:
+          TF_VAR_run_seed: ${{ github.run_number }}
+          TF_VAR_grafana_url: ${{ secrets.GRAFANA_URL }}
+          TF_VAR_grafana_service_account_token: ${{ secrets.GRAFANA_SERVICE_ACCOUNT_TOKEN }}
+          TF_VAR_grafana_folder_uid: ${{ secrets.GRAFANA_FOLDER_UID }}
         run: terraform apply -auto-approve -input=false -var-file=envs/dev.tfvars
+
+      - name: Push Dashboard to Grafana Cloud
+        env:
+          GRAFANA_URL: ${{ secrets.GRAFANA_URL }}
+          GRAFANA_TOKEN: ${{ secrets.GRAFANA_SERVICE_ACCOUNT_TOKEN }}
+          GRAFANA_FOLDER_UID: ${{ secrets.GRAFANA_FOLDER_UID }}
+        run: |
+          if [ -z "$GRAFANA_URL" ] || [ -z "$GRAFANA_TOKEN" ]; then
+            echo "GRAFANA_URL or GRAFANA_SERVICE_ACCOUNT_TOKEN secret not set — skipping dashboard push"
+            echo "See README for setup instructions."
+            exit 0
+          fi
+          PAYLOAD=$(jq -n \
+            --argjson dash "$(cat grafana-dashboard.generated.json)" \
+            --arg folder_uid "${GRAFANA_FOLDER_UID:-}" \
+            --arg msg "CI run #$GITHUB_RUN_NUMBER" \
+            '{
+              dashboard: $dash,
+              overwrite: true,
+              inputs: [{"name":"DS_TESTDATA","type":"datasource","pluginId":"testdata","value":"grafana-testdata-datasource"}],
+              folderUid: $folder_uid,
+              message: $msg
+            }')
+          echo "Pushing dashboard to ${GRAFANA_URL} ..."
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${GRAFANA_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            "${GRAFANA_URL}/api/dashboards/import"
+          echo "Dashboard pushed successfully — refresh Grafana to see updated metrics"
 
       - name: Upload Grafana Dashboard Artifact
         uses: actions/upload-artifact@v4

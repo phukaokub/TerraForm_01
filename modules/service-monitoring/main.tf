@@ -5,7 +5,12 @@ locals {
   # Panel width distributes 24 Grafana columns equally across services
   panel_width = 24 / length(var.services)
 
-  # Derived per-service reliability values
+  # Index simulated metrics by service name for easy lookup
+  _sim_lookup = { for m in var.simulated_metrics : m.service_name => m }
+
+  # Derived per-service reliability values — includes simulated current metrics
+  # for the live-snapshot dashboard row; falls back to threshold values when no
+  # simulated data is provided.
   service_reliability = [for s in var.services : {
     name                           = s.name
     port                           = s.port
@@ -17,6 +22,9 @@ locals {
     endpoint                       = "http://${s.name}:${s.port}${s.health_path}"
     error_budget_minutes           = (1 - s.slo_target / 100) * local.month_minutes
     max_allowable_downtime_minutes = (1 - s.slo_target / 100) * local.month_minutes
+    current_latency_ms             = contains(keys(local._sim_lookup), s.name) ? local._sim_lookup[s.name].current_latency_ms : s.latency_threshold_ms
+    current_error_pct              = contains(keys(local._sim_lookup), s.name) ? local._sim_lookup[s.name].current_error_pct : s.error_rate_threshold_pct
+    current_tps                    = contains(keys(local._sim_lookup), s.name) ? local._sim_lookup[s.name].current_tps : 3000
   }]
 
   # --------------------------------------------------------------------------
@@ -78,9 +86,24 @@ locals {
   # Grafana dashboard — panels built as individual JSON strings so that
   # heterogeneous panel types (gauge, stat, row, text) can coexist in one list
   # without Terraform's type system requiring a uniform object schema.
+  #
+  # Layout (y positions):
+  #   y= 0  Row: Service SLO and Error Budget
+  #   y= 1  SLO gauges               (h=6)
+  #   y= 7  Error budget stats        (h=4)
+  #   y=11  Row: Live Snapshot (changes each deploy)
+  #   y=12  Current latency gauges    (h=5)
+  #   y=17  Current error rate stats  (h=4)
+  #   y=21  Current TPS stats         (h=4)
+  #   y=25  Row: Configured Thresholds
+  #   y=26  Latency threshold gauges  (h=5)
+  #   y=31  Error rate threshold stats(h=4)
+  #   y=35  Row: Generated Alert Rules
+  #   y=36  Alert rules text          (h=10)
   # --------------------------------------------------------------------------
 
-  # Row dividers
+  # ── Row separators ──────────────────────────────────────────────────────────
+
   _row_slo_json = jsonencode({
     collapsed = false
     gridPos   = { h = 1, w = 24, x = 0, y = 0 }
@@ -89,23 +112,32 @@ locals {
     type      = "row"
   })
 
-  _row_latency_json = jsonencode({
+  _row_live_json = jsonencode({
     collapsed = false
     gridPos   = { h = 1, w = 24, x = 0, y = 11 }
     id        = 2
-    title     = "Latency and Error Rate Thresholds"
+    title     = "Live Snapshot (randomised each deploy)"
+    type      = "row"
+  })
+
+  _row_thresholds_json = jsonencode({
+    collapsed = false
+    gridPos   = { h = 1, w = 24, x = 0, y = 25 }
+    id        = 3
+    title     = "Configured Thresholds"
     type      = "row"
   })
 
   _row_alerts_json = jsonencode({
     collapsed = false
-    gridPos   = { h = 1, w = 24, x = 0, y = 21 }
-    id        = 3
+    gridPos   = { h = 1, w = 24, x = 0, y = 35 }
+    id        = 4
     title     = "Generated Alert Rules"
     type      = "row"
   })
 
-  # SLO gauge panels (one per service, row y=1)
+  # ── Row 1: SLO gauges and error budget ─────────────────────────────────────
+
   _slo_panel_jsons = [for idx, s in local.service_reliability : jsonencode({
     datasource = { type = "testdata", uid = "$${DS_TESTDATA}" }
     fieldConfig = {
@@ -144,7 +176,6 @@ locals {
     type  = "gauge"
   })]
 
-  # Error budget stat panels (one per service, row y=7)
   _budget_panel_jsons = [for idx, s in local.service_reliability : jsonencode({
     datasource = { type = "testdata", uid = "$${DS_TESTDATA}" }
     fieldConfig = {
@@ -183,7 +214,126 @@ locals {
     type  = "stat"
   })]
 
-  # Latency gauge panels (one per service, row y=12)
+  # ── Row 2: Live Snapshot — values change on every deploy ───────────────────
+  # Thresholds on these panels match the configured limits so green/yellow/red
+  # status reflects whether the current snapshot is within SLO.
+
+  _live_latency_panel_jsons = [for idx, s in local.service_reliability : jsonencode({
+    datasource = { type = "testdata", uid = "$${DS_TESTDATA}" }
+    fieldConfig = {
+      defaults = {
+        color = { mode = "thresholds" }
+        max   = s.latency_threshold_ms * 2
+        min   = 0
+        thresholds = {
+          mode = "absolute"
+          steps = [
+            { color = "green", value = null },
+            { color = "yellow", value = floor(s.latency_threshold_ms * 0.8) },
+            { color = "red", value = s.latency_threshold_ms }
+          ]
+        }
+        unit = "ms"
+      }
+      overrides = []
+    }
+    gridPos = { h = 5, w = local.panel_width, x = idx * local.panel_width, y = 12 }
+    id      = 310 + idx
+    options = {
+      orientation          = "auto"
+      reduceOptions        = { calcs = ["lastNotNull"], fields = "", values = false }
+      showThresholdLabels  = false
+      showThresholdMarkers = true
+    }
+    targets = [{
+      alias      = "current ms"
+      csvContent = "Time,Value\n2024-01-01T00:00:00Z,${s.current_latency_ms}"
+      datasource = { type = "testdata", uid = "$${DS_TESTDATA}" }
+      refId      = "A"
+      scenarioId = "csv_content"
+    }]
+    title = "${s.name} - Current Latency"
+    type  = "gauge"
+  })]
+
+  _live_errorrate_panel_jsons = [for idx, s in local.service_reliability : jsonencode({
+    datasource = { type = "testdata", uid = "$${DS_TESTDATA}" }
+    fieldConfig = {
+      defaults = {
+        color = { mode = "thresholds" }
+        thresholds = {
+          mode = "absolute"
+          steps = [
+            { color = "green", value = null },
+            { color = "yellow", value = s.error_rate_threshold_pct * 0.7 },
+            { color = "red", value = s.error_rate_threshold_pct }
+          ]
+        }
+        unit = "percent"
+      }
+      overrides = []
+    }
+    gridPos = { h = 4, w = local.panel_width, x = idx * local.panel_width, y = 17 }
+    id      = 410 + idx
+    options = {
+      colorMode     = "background"
+      graphMode     = "none"
+      justifyMode   = "auto"
+      orientation   = "auto"
+      reduceOptions = { calcs = ["lastNotNull"], fields = "", values = false }
+      textMode      = "auto"
+    }
+    targets = [{
+      alias      = "error %"
+      csvContent = "Time,Value\n2024-01-01T00:00:00Z,${s.current_error_pct}"
+      datasource = { type = "testdata", uid = "$${DS_TESTDATA}" }
+      refId      = "A"
+      scenarioId = "csv_content"
+    }]
+    title = "${s.name} - Current Error Rate"
+    type  = "stat"
+  })]
+
+  _live_tps_panel_jsons = [for idx, s in local.service_reliability : jsonencode({
+    datasource = { type = "testdata", uid = "$${DS_TESTDATA}" }
+    fieldConfig = {
+      defaults = {
+        color = { mode = "thresholds" }
+        thresholds = {
+          mode = "absolute"
+          steps = [
+            { color = "red", value = null },
+            { color = "yellow", value = 2500 },
+            { color = "green", value = 4000 }
+          ]
+        }
+        unit = "short"
+      }
+      overrides = []
+    }
+    gridPos = { h = 4, w = local.panel_width, x = idx * local.panel_width, y = 21 }
+    id      = 510 + idx
+    options = {
+      colorMode     = "background"
+      graphMode     = "none"
+      justifyMode   = "auto"
+      orientation   = "auto"
+      reduceOptions = { calcs = ["lastNotNull"], fields = "", values = false }
+      textMode      = "auto"
+    }
+    targets = [{
+      alias      = "TPS"
+      csvContent = "Time,Value\n2024-01-01T00:00:00Z,${s.current_tps}"
+      datasource = { type = "testdata", uid = "$${DS_TESTDATA}" }
+      refId      = "A"
+      scenarioId = "csv_content"
+    }]
+    title = "${s.name} - Current TPS"
+    type  = "stat"
+  })]
+
+  # ── Row 3: Configured Thresholds ───────────────────────────────────────────
+
   _latency_panel_jsons = [for idx, s in local.service_reliability : jsonencode({
     datasource = { type = "testdata", uid = "$${DS_TESTDATA}" }
     fieldConfig = {
@@ -203,7 +353,7 @@ locals {
       }
       overrides = []
     }
-    gridPos = { h = 5, w = local.panel_width, x = idx * local.panel_width, y = 12 }
+    gridPos = { h = 5, w = local.panel_width, x = idx * local.panel_width, y = 26 }
     id      = 300 + idx
     options = {
       orientation          = "auto"
@@ -222,7 +372,6 @@ locals {
     type  = "gauge"
   })]
 
-  # Error rate stat panels (one per service, row y=17)
   _errorrate_panel_jsons = [for idx, s in local.service_reliability : jsonencode({
     datasource = { type = "testdata", uid = "$${DS_TESTDATA}" }
     fieldConfig = {
@@ -240,7 +389,7 @@ locals {
       }
       overrides = []
     }
-    gridPos = { h = 4, w = local.panel_width, x = idx * local.panel_width, y = 17 }
+    gridPos = { h = 4, w = local.panel_width, x = idx * local.panel_width, y = 31 }
     id      = 400 + idx
     options = {
       colorMode     = "background"
@@ -261,13 +410,14 @@ locals {
     type  = "stat"
   })]
 
-  # Alert rules markdown summary for text panel
+  # ── Alert rules summary text panel ─────────────────────────────────────────
+
   _alert_summary_md = join("\n\n", [for r in local.alert_rules :
     "**${r.name}** `${r.severity}`  \n${r.condition}  \nChannels: `${join("`, `", r.channels)}`  \nRunbook: `${r.runbook}`"
   ])
 
   _alerts_text_panel_json = jsonencode({
-    gridPos = { h = 10, w = 24, x = 0, y = 22 }
+    gridPos = { h = 10, w = 24, x = 0, y = 36 }
     id      = 500
     options = {
       content = "## Alert Configuration (Terraform-generated)\n\n${local._alert_summary_md}"
@@ -282,7 +432,11 @@ locals {
     [local._row_slo_json],
     local._slo_panel_jsons,
     local._budget_panel_jsons,
-    [local._row_latency_json],
+    [local._row_live_json],
+    local._live_latency_panel_jsons,
+    local._live_errorrate_panel_jsons,
+    local._live_tps_panel_jsons,
+    [local._row_thresholds_json],
     local._latency_panel_jsons,
     local._errorrate_panel_jsons,
     [local._row_alerts_json],

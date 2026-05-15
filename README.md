@@ -80,45 +80,54 @@ terraform apply -var-file=envs/prod.tfvars    -auto-approve
 
 ---
 
-## Grafana dashboard import
+## Grafana Cloud setup (for live dashboard push)
 
-The generated `grafana-dashboard.generated.json` uses Grafana's built-in **TestData** datasource —
-no datasource configuration required.
+The CI workflow pushes `grafana-dashboard.generated.json` directly to your Grafana Cloud instance on every apply. Three GitHub Actions secrets are required:
 
-### Option A — Download from CI (no local Terraform needed)
+| Secret | Value |
+|---|---|
+| `GRAFANA_URL` | Your Grafana Cloud stack URL, e.g. `https://yourorg.grafana.net` |
+| `GRAFANA_SERVICE_ACCOUNT_TOKEN` | Service account token with **Editor** role (see steps below) |
+| `GRAFANA_FOLDER_UID` | *(optional)* Folder UID to import into; leave empty for the General folder |
 
-Every push/PR runs `terraform apply` and uploads the dashboard JSON as a GitHub Actions artifact:
+**Create a service account token in Grafana Cloud:**
 
-1. Go to the **Actions** tab in this repository
-2. Click the latest workflow run
-3. Scroll to the bottom — click **grafana-dashboard-dev** under **Artifacts** to download the zip
-4. Extract the zip to get `grafana-dashboard.generated.json`
-5. Follow the import steps below
+1. Open your Grafana instance → **Administration → Service accounts → Add service account**
+2. Name it `terraform-ci`, role **Editor** → **Create**
+3. Click **Add service account token** → copy the token
+4. In GitHub: **Settings → Secrets and variables → Actions → New repository secret**
+   - `GRAFANA_SERVICE_ACCOUNT_TOKEN` = the copied token
+   - `GRAFANA_URL` = `https://yourorg.grafana.net`
 
-### Option B — Generate locally
+Once these secrets are set, every push/PR will:
+1. Run `terraform apply` with a new `run_seed` (`$GITHUB_RUN_NUMBER`)
+2. Generate a fresh `grafana-dashboard.generated.json` with randomised Live Snapshot values
+3. Push the dashboard directly to Grafana — just **refresh your browser** to see updated metrics
 
-```bash
-terraform init
-terraform apply -var-file=envs/dev.tfvars -auto-approve
-```
+> **No secrets set?** The push step exits cleanly with a skip message — the rest of the CI pipeline is unaffected.
 
-This creates `grafana-dashboard.generated.json` in the project root.
+---
 
-### Importing into Grafana
+## Grafana dashboard — panels
 
-1. Sign up at [grafana.com](https://grafana.com) (free tier, no credit card needed)
-2. In your Grafana instance, go to **Dashboards → Import**
-3. Upload `grafana-dashboard.generated.json`
-4. When prompted, select **TestData DB** as the datasource
-5. Click **Import**
+The dashboard has four rows:
 
-The dashboard contains 12 panels across three rows:
+| Row | Panels | Data |
+|---|---|---|
+| **Service SLO and Error Budget** | SLO gauge + error budget stat | Configured targets (static) |
+| **Live Snapshot** | Current latency gauge + error rate stat + TPS stat | Randomised each deploy via `run_seed` |
+| **Configured Thresholds** | Latency threshold gauge + error rate threshold stat | Configured thresholds (static) |
+| **Generated Alert Rules** | Alert rules markdown | Generated from variables |
 
-- **Service SLO and Error Budget** — gauge (SLO %) + stat (error budget mins/month) per service
-- **Latency and Error Rate Thresholds** — gauge (ms) + stat (error %) per service
-- **Generated Alert Rules** — markdown summary of all alert rules with runbook links
+The "Live Snapshot" row is the key demo row — its values change on every CI run. Panels go **green** when within threshold, **yellow** when approaching the limit, and **red** when breached.
 
-> **Tip:** Change the environment and re-apply to regenerate the dashboard with different thresholds, then re-import to Grafana to see the values update.
+**Import manually (no Grafana secrets needed):**
+
+1. Download the `grafana-dashboard-dev` artifact from the latest Actions run
+2. In Grafana: **Dashboards → Import → Upload JSON file**
+3. Select **TestData DB** as the datasource → **Import**
+
+---
 
 ---
 
@@ -168,8 +177,16 @@ GitHub Actions workflow at `.github/workflows/terraform-ci.yml`:
 2. **Terraform Init** — initialises providers without a backend
 3. **Terraform Validate** — validates all modules and root config
 4. **Terraform Plan (dev)** — runs a full plan against `envs/dev.tfvars` and posts diff to the Actions step summary
-5. **Terraform Apply (dev)** — applies against `envs/dev.tfvars` to generate all artifact files
-6. **Upload Grafana Dashboard Artifact** — uploads `grafana-dashboard.generated.json` as a downloadable artifact named `grafana-dashboard-dev`
+5. **Terraform Apply (dev)** — applies with `run_seed=$GITHUB_RUN_NUMBER`; every run produces a different random Live Snapshot
+6. **Push Dashboard to Grafana Cloud** — uses `curl` + the Grafana import API to push the generated dashboard; skips gracefully if `GRAFANA_URL` / `GRAFANA_SERVICE_ACCOUNT_TOKEN` secrets are not set
+7. **Upload Grafana Dashboard Artifact** — uploads `grafana-dashboard.generated.json` as a fallback for manual import
+
+**Presentation demo flow:**
+
+1. Open your Grafana dashboard in one browser tab
+2. Create or push to this PR — watch the Actions run
+3. When the run completes, refresh Grafana — the Live Snapshot row shows new metric values
+4. Repeat to show different random states (some green, some yellow/red)
 
 ---
 
