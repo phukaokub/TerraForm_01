@@ -65,6 +65,37 @@ jobs:
           # Strip accidental trailing slash from GRAFANA_URL
           GRAFANA_URL="${GRAFANA_URL%/}"
 
+          # Discover the TestData datasource UID in this Grafana instance.
+          # In Grafana Cloud the UID is an auto-generated GUID, not the
+          # provisioning default "grafana-testdata-datasource", so we must
+          # look it up. If no TestData datasource exists we create one with
+          # the exact UID our dashboard JSON already references.
+          echo "Discovering TestData datasource UID..."
+          DS_UID=$(curl -s \
+            -H "Authorization: Bearer ${GRAFANA_TOKEN}" \
+            "${GRAFANA_URL}/api/datasources" | \
+            jq -r '.[] | select(.type == "testdata") | .uid' | head -1)
+
+          if [ -z "$DS_UID" ]; then
+            echo "TestData datasource not found — creating with uid grafana-testdata-datasource"
+            CREATE_RESP=$(curl -sS -X POST \
+              -H "Authorization: Bearer ${GRAFANA_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d '{"name":"TestData DB","type":"testdata","uid":"grafana-testdata-datasource","access":"proxy"}' \
+              "${GRAFANA_URL}/api/datasources")
+            DS_UID=$(echo "$CREATE_RESP" | jq -r '.datasource.uid // .uid // "grafana-testdata-datasource"')
+            echo "Created TestData datasource — assigned UID: ${DS_UID}"
+          else
+            echo "Found TestData datasource — UID: ${DS_UID}"
+          fi
+
+          # Substitute the actual UID into the dashboard JSON when it differs
+          # from the compile-time placeholder written by Terraform.
+          if [ "$DS_UID" != "grafana-testdata-datasource" ]; then
+            echo "Patching dashboard JSON: grafana-testdata-datasource -> ${DS_UID}"
+            sed -i "s/grafana-testdata-datasource/${DS_UID}/g" grafana-dashboard.generated.json
+          fi
+
           PAYLOAD=$(jq -n \
             --argjson dash "$(cat grafana-dashboard.generated.json)" \
             --arg folder_uid "${GRAFANA_FOLDER_UID:-}" \
