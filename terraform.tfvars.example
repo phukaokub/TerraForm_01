@@ -1,0 +1,16 @@
+project_name = "transaction-services"
+environment  = "staging"
+
+services = [
+  {
+    name                     = "payment-api"
+    port                     = 8080
+    health_path              = "/health"
+    retry_count              = 3
+    slo_target               = 99.95
+    latency_threshold_ms     = 400
+    error_rate_threshold_pct = 0.5
+  }
+]
+
+alert_channels = ["slack://sre-transaction-alerts"]
