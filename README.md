@@ -85,7 +85,26 @@ terraform apply -var-file=envs/prod.tfvars    -auto-approve
 The generated `grafana-dashboard.generated.json` uses Grafana's built-in **TestData** datasource —
 no datasource configuration required.
 
-**Steps:**
+### Option A — Download from CI (no local Terraform needed)
+
+Every push/PR runs `terraform apply` and uploads the dashboard JSON as a GitHub Actions artifact:
+
+1. Go to the **Actions** tab in this repository
+2. Click the latest workflow run
+3. Scroll to the bottom — click **grafana-dashboard-dev** under **Artifacts** to download the zip
+4. Extract the zip to get `grafana-dashboard.generated.json`
+5. Follow the import steps below
+
+### Option B — Generate locally
+
+```bash
+terraform init
+terraform apply -var-file=envs/dev.tfvars -auto-approve
+```
+
+This creates `grafana-dashboard.generated.json` in the project root.
+
+### Importing into Grafana
 
 1. Sign up at [grafana.com](https://grafana.com) (free tier, no credit card needed)
 2. In your Grafana instance, go to **Dashboards → Import**
@@ -148,8 +167,9 @@ GitHub Actions workflow at `.github/workflows/terraform-ci.yml`:
 1. **Terraform Fmt Check** — enforces consistent formatting
 2. **Terraform Init** — initialises providers without a backend
 3. **Terraform Validate** — validates all modules and root config
-4. **Terraform Plan (dev)** — runs a full plan against `envs/dev.tfvars`
-5. **Post Plan to Step Summary** — appends the plan diff to the GitHub Actions run summary, mirroring how teams use Atlantis or Terraform Cloud
+4. **Terraform Plan (dev)** — runs a full plan against `envs/dev.tfvars` and posts diff to the Actions step summary
+5. **Terraform Apply (dev)** — applies against `envs/dev.tfvars` to generate all artifact files
+6. **Upload Grafana Dashboard Artifact** — uploads `grafana-dashboard.generated.json` as a downloadable artifact named `grafana-dashboard-dev`
 
 ---
 
