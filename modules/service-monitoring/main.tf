@@ -464,11 +464,10 @@ locals {
       defaults = {
         color = { mode = "thresholds" }
         custom = {
-          lineWidth       = 2
-          fillOpacity     = 10
-          pointSize       = 6
-          showPoints      = "always"
-          thresholdsStyle = { mode = "line" }
+          lineWidth   = 2
+          fillOpacity = 10
+          pointSize   = 6
+          showPoints  = "always"
         }
         thresholds = {
           mode = "absolute"
@@ -526,11 +525,10 @@ locals {
       defaults = {
         color = { mode = "thresholds" }
         custom = {
-          lineWidth       = 2
-          fillOpacity     = 10
-          pointSize       = 6
-          showPoints      = "always"
-          thresholdsStyle = { mode = "line" }
+          lineWidth   = 2
+          fillOpacity = 10
+          pointSize   = 6
+          showPoints  = "always"
         }
         thresholds = {
           mode = "absolute"
@@ -590,11 +588,10 @@ locals {
       defaults = {
         color = { mode = "thresholds" }
         custom = {
-          lineWidth       = 2
-          fillOpacity     = 10
-          pointSize       = 6
-          showPoints      = "always"
-          thresholdsStyle = { mode = "line" }
+          lineWidth   = 2
+          fillOpacity = 10
+          pointSize   = 6
+          showPoints  = "always"
         }
         thresholds = {
           mode = "absolute"
