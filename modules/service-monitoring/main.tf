@@ -440,6 +440,24 @@ locals {
   # threshold breaches (alert conditions) are visible as coloured regions.
 
   _ts_latency_panel_jsons = [for idx, s in local.service_reliability : jsonencode({
+    alert = {
+      alertRuleTags = {}
+      conditions = [{
+        evaluator = { params = [s.latency_threshold_ms], type = "gt" }
+        operator  = { type = "and" }
+        query     = { params = ["A", "5m", "now"] }
+        reducer   = { params = [], type = "last" }
+        type      = "query"
+      }]
+      executionErrorState = "alerting"
+      "for"               = "1m"
+      frequency           = "1m"
+      handler             = 1
+      message             = "${s.name} latency has exceeded the ${s.latency_threshold_ms}ms threshold. Check runbook: https://runbooks.internal/${var.project_name}/${s.name}/transaction-drop"
+      name                = "${s.name} - High Latency Alert (>${s.latency_threshold_ms}ms)"
+      noDataState         = "no_data"
+      notifications       = []
+    }
     datasource  = { type = "testdata", uid = "grafana-testdata-datasource" }
     description = "Alert fires when latency > ${s.latency_threshold_ms} ms  |  Runbook: https://runbooks.internal/${var.project_name}/${s.name}/transaction-drop"
     fieldConfig = {
@@ -448,6 +466,8 @@ locals {
         custom = {
           lineWidth       = 2
           fillOpacity     = 10
+          pointSize       = 5
+          showPoints      = "always"
           thresholdsStyle = { mode = "line+area" }
         }
         thresholds = {
@@ -482,6 +502,24 @@ locals {
   })]
 
   _ts_errorrate_panel_jsons = [for idx, s in local.service_reliability : jsonencode({
+    alert = {
+      alertRuleTags = {}
+      conditions = [{
+        evaluator = { params = [s.error_rate_threshold_pct], type = "gt" }
+        operator  = { type = "and" }
+        query     = { params = ["A", "5m", "now"] }
+        reducer   = { params = [], type = "last" }
+        type      = "query"
+      }]
+      executionErrorState = "alerting"
+      "for"               = "5m"
+      frequency           = "1m"
+      handler             = 1
+      message             = "${s.name} error rate has exceeded the ${s.error_rate_threshold_pct}% threshold. Check runbook: https://runbooks.internal/${var.project_name}/${s.name}/deployment-anomaly"
+      name                = "${s.name} - High Error Rate Alert (>${s.error_rate_threshold_pct}%)"
+      noDataState         = "no_data"
+      notifications       = []
+    }
     datasource  = { type = "testdata", uid = "grafana-testdata-datasource" }
     description = "Alert fires when error rate > ${s.error_rate_threshold_pct}%  |  Runbook: https://runbooks.internal/${var.project_name}/${s.name}/deployment-anomaly"
     fieldConfig = {
@@ -490,6 +528,8 @@ locals {
         custom = {
           lineWidth       = 2
           fillOpacity     = 10
+          pointSize       = 5
+          showPoints      = "always"
           thresholdsStyle = { mode = "line+area" }
         }
         thresholds = {
@@ -526,6 +566,24 @@ locals {
   })]
 
   _ts_tps_panel_jsons = [for idx, s in local.service_reliability : jsonencode({
+    alert = {
+      alertRuleTags = {}
+      conditions = [{
+        evaluator = { params = [2500], type = "lt" }
+        operator  = { type = "and" }
+        query     = { params = ["A", "5m", "now"] }
+        reducer   = { params = [], type = "last" }
+        type      = "query"
+      }]
+      executionErrorState = "alerting"
+      "for"               = "5m"
+      frequency           = "1m"
+      handler             = 1
+      message             = "${s.name} transaction rate has dropped below 80% of the expected baseline TPS. Check runbook: https://runbooks.internal/${var.project_name}/${s.name}/transaction-drop"
+      name                = "${s.name} - Transaction Drop Alert (<80% baseline)"
+      noDataState         = "no_data"
+      notifications       = []
+    }
     datasource  = { type = "testdata", uid = "grafana-testdata-datasource" }
     description = "Alert fires when TPS drops below 80% of the expected baseline  |  Runbook: https://runbooks.internal/${var.project_name}/${s.name}/transaction-drop"
     fieldConfig = {
@@ -534,6 +592,8 @@ locals {
         custom = {
           lineWidth       = 2
           fillOpacity     = 10
+          pointSize       = 5
+          showPoints      = "always"
           thresholdsStyle = { mode = "line+area" }
         }
         thresholds = {
@@ -611,15 +671,30 @@ locals {
         { id = "timeseries", name = "Time series", type = "panel", version = "" }
       ]
       annotations = {
-        list = [{
-          builtIn    = 1
-          datasource = { type = "grafana", uid = "-- Grafana --" }
-          enable     = true
-          hide       = true
-          iconColor  = "rgba(0, 211, 255, 1)"
-          name       = "Annotations and Alerts"
-          type       = "dashboard"
-        }]
+        list = [
+          {
+            builtIn    = 1
+            datasource = { type = "grafana", uid = "-- Grafana --" }
+            enable     = true
+            hide       = true
+            iconColor  = "rgba(0, 211, 255, 1)"
+            name       = "Annotations and Alerts"
+            type       = "dashboard"
+          },
+          {
+            builtIn    = 0
+            datasource = { type = "testdata", uid = "grafana-testdata-datasource" }
+            enable     = true
+            hide       = false
+            iconColor  = "red"
+            name       = "Simulated Alert Breach"
+            target = {
+              lines      = 3
+              scenarioId = "annotations"
+            }
+            type = "dashboard"
+          }
+        ]
       }
       description   = "Reliability dashboard for ${var.project_name} (${var.environment}) - generated by Terraform"
       editable      = true
