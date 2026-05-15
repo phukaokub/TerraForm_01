@@ -61,6 +61,21 @@ jobs:
             echo "See README for setup instructions."
             exit 0
           fi
+
+          # --- TEMPORARY DEBUG (remove after confirming fix) ---
+          echo "=== Secret diagnostics ==="
+          echo "GRAFANA_URL (masked by GitHub Actions): ${GRAFANA_URL}"
+          echo "GRAFANA_URL character count          : ${#GRAFANA_URL}"
+          if [[ "${GRAFANA_URL: -1}" == "/" ]]; then
+            echo "WARNING: GRAFANA_URL has a trailing slash — stripping it"
+            GRAFANA_URL="${GRAFANA_URL%/}"
+          fi
+          echo "GRAFANA_TOKEN character count        : ${#GRAFANA_TOKEN}"
+          echo "GRAFANA_FOLDER_UID                   : '${GRAFANA_FOLDER_UID}'"
+          echo "Full API endpoint                    : ${GRAFANA_URL}/api/dashboards/db"
+          echo "==========================="
+          # --- END TEMPORARY DEBUG ---
+
           PAYLOAD=$(jq -n \
             --argjson dash "$(cat grafana-dashboard.generated.json)" \
             --arg folder_uid "${GRAFANA_FOLDER_UID:-}" \
@@ -71,15 +86,22 @@ jobs:
               folderUid: ($folder_uid | if . == "" then null else . end),
               message: $msg
             }')
-          echo "Pushing dashboard to ${GRAFANA_URL} ..."
-          curl -sS -X POST \
+          echo "Pushing dashboard to ${GRAFANA_URL}/api/dashboards/db ..."
+          HTTP_STATUS=$(curl -sS -X POST \
             -H "Authorization: Bearer ${GRAFANA_TOKEN}" \
             -H "Content-Type: application/json" \
             -d "$PAYLOAD" \
             "${GRAFANA_URL}/api/dashboards/db" \
-            -o /tmp/grafana-response.json
+            -o /tmp/grafana-response.json \
+            -w "%{http_code}")
+          echo "HTTP status: ${HTTP_STATUS}"
+          echo "Response body:"
           cat /tmp/grafana-response.json
           echo ""
+          if [[ "${HTTP_STATUS}" != "200" ]]; then
+            echo "ERROR: Grafana API returned HTTP ${HTTP_STATUS} — check GRAFANA_URL and GRAFANA_SERVICE_ACCOUNT_TOKEN secrets"
+            exit 1
+          fi
           echo "Dashboard pushed successfully — refresh Grafana to see updated metrics"
 
       - name: Upload Grafana Dashboard Artifact
