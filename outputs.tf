@@ -1,7 +1,7 @@
 output "generated_files" {
   description = "Generated deployment and monitoring assets"
   value = {
-    deployment_manifest = local_file.deployment_manifest.filename
+    deployment_manifest  = local_file.deployment_manifest.filename
     monitoring_dashboard = local_file.monitoring_dashboard.filename
   }
 }

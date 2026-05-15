@@ -14,20 +14,20 @@ locals {
     project = var.project_name
     env     = var.environment
     services = [for service in var.services : {
-      name      = service.name
+      name = service.name
       monitoring = {
-        endpoint     = "http://${service.name}:${service.port}${service.health_path}"
-        retry_count  = service.retry_count
-        latency_ms   = service.latency_threshold_ms
-        error_rate   = service.error_rate_threshold_pct
-        slo_uptime   = service.slo_target
+        endpoint    = "http://${service.name}:${service.port}${service.health_path}"
+        retry_count = service.retry_count
+        latency_ms  = service.latency_threshold_ms
+        error_rate  = service.error_rate_threshold_pct
+        slo_uptime  = service.slo_target
       }
     }]
   })
 
   dashboard_json = jsonencode({
     dashboard = {
-      title   = "${var.project_name}-${var.environment}-reliability"
+      title = "${var.project_name}-${var.environment}-reliability"
       metrics = [
         "mttd_minutes",
         "mttr_minutes",
@@ -38,10 +38,10 @@ locals {
         channels = var.alert_channels
       }
       probes = [for service in var.services : {
-        service               = service.name
-        endpoint              = "http://${service.name}:${service.port}${service.health_path}"
-        latency_threshold_ms  = service.latency_threshold_ms
-        error_rate_threshold  = service.error_rate_threshold_pct
+        service              = service.name
+        endpoint             = "http://${service.name}:${service.port}${service.health_path}"
+        latency_threshold_ms = service.latency_threshold_ms
+        error_rate_threshold = service.error_rate_threshold_pct
       }]
     }
   })
