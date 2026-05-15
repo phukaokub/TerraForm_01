@@ -189,7 +189,7 @@ GitHub Actions workflow at `.github/workflows/terraform-ci.yml`:
 4. Repeat to show different random states (some green, some yellow/red)
 
 ---
-
+/**
 ## 🎙️ Interview walkthrough
 
 > Use this script to narrate a live demo.
@@ -238,7 +238,7 @@ Import the JSON. The SLO gauges show 99.95% with a green threshold, error budget
 
 Every PR runs a `terraform plan` against dev and posts the diff to the Actions run summary —
 the same visibility pattern teams use with Atlantis. No cloud credentials required.
-
+/**
 ---
 
 ## Cleanup
