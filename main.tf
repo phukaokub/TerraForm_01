@@ -6,53 +6,70 @@ terraform {
       source  = "hashicorp/local"
       version = "~> 2.5"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
+    }
   }
 }
 
-locals {
-  deployment_yaml = yamlencode({
-    project = var.project_name
-    env     = var.environment
-    services = [for service in var.services : {
-      name = service.name
-      monitoring = {
-        endpoint    = "http://${service.name}:${service.port}${service.health_path}"
-        retry_count = service.retry_count
-        latency_ms  = service.latency_threshold_ms
-        error_rate  = service.error_rate_threshold_pct
-        slo_uptime  = service.slo_target
-      }
-    }]
-  })
+# ---------------------------------------------------------------------------
+# Simulated live metrics — one random snapshot per service per apply.
+# keepers tie the value to run_seed: changing the seed (e.g. to the CI run
+# number) forces new values; keeping it stable gives reproducible local demos.
+# ---------------------------------------------------------------------------
 
-  dashboard_json = jsonencode({
-    dashboard = {
-      title = "${var.project_name}-${var.environment}-reliability"
-      metrics = [
-        "mttd_minutes",
-        "mttr_minutes",
-        "mtbf_hours",
-        "availability_percent"
-      ]
-      alerts = {
-        channels = var.alert_channels
-      }
-      probes = [for service in var.services : {
-        service              = service.name
-        endpoint             = "http://${service.name}:${service.port}${service.health_path}"
-        latency_threshold_ms = service.latency_threshold_ms
-        error_rate_threshold = service.error_rate_threshold_pct
-      }]
-    }
-  })
+resource "random_integer" "current_latency_ms" {
+  for_each = { for s in var.services : s.name => s }
+  min      = max(50, floor(each.value.latency_threshold_ms * 0.5))
+  max      = ceil(each.value.latency_threshold_ms * 1.5)
+  keepers  = { run_seed = var.run_seed }
+}
+
+resource "random_integer" "current_error_pct_x10" {
+  for_each = { for s in var.services : s.name => s }
+  min      = 0
+  max      = max(1, ceil(each.value.error_rate_threshold_pct * 2.0 * 10))
+  keepers  = { run_seed = var.run_seed }
+}
+
+resource "random_integer" "current_tps" {
+  for_each = { for s in var.services : s.name => s }
+  min      = 1500
+  max      = 8000
+  keepers  = { run_seed = var.run_seed }
+}
+
+locals {
+  simulated_metrics = [for s in var.services : {
+    service_name       = s.name
+    current_latency_ms = random_integer.current_latency_ms[s.name].result
+    current_error_pct  = random_integer.current_error_pct_x10[s.name].result / 10.0
+    current_tps        = random_integer.current_tps[s.name].result
+  }]
+}
+
+module "service_monitoring" {
+  source = "./modules/service-monitoring"
+
+  project_name      = var.project_name
+  environment       = var.environment
+  services          = var.services
+  alert_channels    = var.alert_channels
+  simulated_metrics = local.simulated_metrics
 }
 
 resource "local_file" "deployment_manifest" {
   filename = "${path.module}/deployment.generated.yaml"
-  content  = local.deployment_yaml
+  content  = module.service_monitoring.deployment_yaml
 }
 
-resource "local_file" "monitoring_dashboard" {
-  filename = "${path.module}/dashboard.generated.json"
-  content  = local.dashboard_json
+resource "local_file" "alerts_config" {
+  filename = "${path.module}/alerts.generated.json"
+  content  = module.service_monitoring.alerts_json
+}
+
+resource "local_file" "grafana_dashboard" {
+  filename = "${path.module}/grafana-dashboard.generated.json"
+  content  = module.service_monitoring.grafana_dashboard_json
 }

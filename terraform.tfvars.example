@@ -14,3 +14,19 @@ services = [
 ]
 
 alert_channels = ["slack://sre-transaction-alerts"]
+
+# ── Live metrics seed ──────────────────────────────────────────────────────────
+# Change this string to regenerate the random metric values shown in the
+# "Live Snapshot" Grafana dashboard row.  In CI, run_seed is automatically
+# overridden to the GitHub Actions run number so every pipeline run produces a
+# different snapshot.  Locally, bump this to "demo-2", "demo-3", etc. to
+# simulate multiple deploys without deleting terraform.tfstate.
+run_seed = "demo-1"
+
+# ── Grafana Cloud integration (optional) ──────────────────────────────────────
+# Set GRAFANA_URL and GRAFANA_FOLDER_UID here (or leave empty to skip the push).
+# NEVER put grafana_service_account_token in this file — use the
+# GRAFANA_SERVICE_ACCOUNT_TOKEN GitHub Actions secret or the env var
+# TF_VAR_grafana_service_account_token instead.
+grafana_url        = "https://yourorg.grafana.net"
+grafana_folder_uid = ""  # leave empty for the General folder

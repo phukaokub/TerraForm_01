@@ -1,0 +1,14 @@
+# Terraform state and local plugins
+terraform.tfstate
+terraform.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+
+# tfvars with secrets — committed env files are in envs/ and are fine
+*.tfvars
+!envs/*.tfvars
+!terraform.tfvars.example
+
+# Generated artifacts (created by terraform apply)
+*.generated.yaml
+*.generated.json
