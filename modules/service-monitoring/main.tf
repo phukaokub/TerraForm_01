@@ -136,6 +136,14 @@ locals {
     type      = "row"
   })
 
+  _row_deployment_alerts_json = jsonencode({
+    collapsed = false
+    gridPos   = { h = 1, w = 24, x = 0, y = 47 }
+    id        = 5
+    title     = "Deployment Alert Monitoring (Incident Overview)"
+    type      = "row"
+  })
+
   # ── Row 1: SLO gauges and error budget ─────────────────────────────────────
 
   _slo_panel_jsons = [for idx, s in local.service_reliability : jsonencode({
@@ -427,6 +435,199 @@ locals {
     type  = "text"
   })
 
+  # ── Row 5: Deployment Alert Monitoring — time series with thresholds ─────────
+  # These panels simulate a rolling time-window of metric data so that
+  # threshold breaches (alert conditions) are visible as coloured regions.
+
+  _ts_latency_panel_jsons = [for idx, s in local.service_reliability : jsonencode({
+    alert = {
+      alertRuleTags = {}
+      conditions = [{
+        evaluator = { params = [s.latency_threshold_ms], type = "gt" }
+        operator  = { type = "and" }
+        query     = { params = ["A", "5m", "now"] }
+        reducer   = { params = [], type = "last" }
+        type      = "query"
+      }]
+      executionErrorState = "alerting"
+      "for"               = "1m"
+      frequency           = "1m"
+      handler             = 1
+      message             = "${s.name} latency has exceeded the ${s.latency_threshold_ms}ms threshold. Check runbook: https://runbooks.internal/${var.project_name}/${s.name}/transaction-drop"
+      name                = "${s.name} - High Latency Alert (>${s.latency_threshold_ms}ms)"
+      noDataState         = "no_data"
+      notifications       = []
+    }
+    datasource  = { type = "testdata", uid = "grafana-testdata-datasource" }
+    description = "Alert fires when latency > ${s.latency_threshold_ms} ms  |  Runbook: https://runbooks.internal/${var.project_name}/${s.name}/transaction-drop"
+    fieldConfig = {
+      defaults = {
+        color = { mode = "thresholds" }
+        custom = {
+          lineWidth       = 2
+          fillOpacity     = 10
+          pointSize       = 6
+          showPoints      = "always"
+          thresholdsStyle = { mode = "line" }
+        }
+        thresholds = {
+          mode = "absolute"
+          steps = [
+            { color = "green", value = null },
+            { color = "yellow", value = floor(s.latency_threshold_ms * 0.8) },
+            { color = "red", value = s.latency_threshold_ms }
+          ]
+        }
+        unit = "ms"
+      }
+      overrides = []
+    }
+    gridPos = { h = 8, w = local.panel_width, x = idx * local.panel_width, y = 48 }
+    id      = 600 + idx
+    options = {
+      tooltip = { mode = "single", sort = "none" }
+      legend  = { displayMode = "list", placement = "bottom" }
+    }
+    targets = [{
+      alias      = "latency"
+      datasource = { type = "testdata", uid = "grafana-testdata-datasource" }
+      refId      = "A"
+      scenarioId = "random_walk"
+      startValue = s.current_latency_ms
+      min        = max(50, floor(s.latency_threshold_ms * 0.4))
+      max        = ceil(s.latency_threshold_ms * 1.6)
+    }]
+    title = "${s.name} - Latency Over Time (Alert: >${s.latency_threshold_ms}ms)"
+    type  = "timeseries"
+  })]
+
+  _ts_errorrate_panel_jsons = [for idx, s in local.service_reliability : jsonencode({
+    alert = {
+      alertRuleTags = {}
+      conditions = [{
+        evaluator = { params = [s.error_rate_threshold_pct], type = "gt" }
+        operator  = { type = "and" }
+        query     = { params = ["A", "5m", "now"] }
+        reducer   = { params = [], type = "last" }
+        type      = "query"
+      }]
+      executionErrorState = "alerting"
+      "for"               = "5m"
+      frequency           = "1m"
+      handler             = 1
+      message             = "${s.name} error rate has exceeded the ${s.error_rate_threshold_pct}% threshold. Check runbook: https://runbooks.internal/${var.project_name}/${s.name}/deployment-anomaly"
+      name                = "${s.name} - High Error Rate Alert (>${s.error_rate_threshold_pct}%)"
+      noDataState         = "no_data"
+      notifications       = []
+    }
+    datasource  = { type = "testdata", uid = "grafana-testdata-datasource" }
+    description = "Alert fires when error rate > ${s.error_rate_threshold_pct}%  |  Runbook: https://runbooks.internal/${var.project_name}/${s.name}/deployment-anomaly"
+    fieldConfig = {
+      defaults = {
+        color = { mode = "thresholds" }
+        custom = {
+          lineWidth       = 2
+          fillOpacity     = 10
+          pointSize       = 6
+          showPoints      = "always"
+          thresholdsStyle = { mode = "line" }
+        }
+        thresholds = {
+          mode = "absolute"
+          steps = [
+            { color = "green", value = null },
+            { color = "yellow", value = s.error_rate_threshold_pct * 0.7 },
+            { color = "red", value = s.error_rate_threshold_pct }
+          ]
+        }
+        unit = "percent"
+        min  = 0
+        max  = s.error_rate_threshold_pct * 3
+      }
+      overrides = []
+    }
+    gridPos = { h = 8, w = local.panel_width, x = idx * local.panel_width, y = 56 }
+    id      = 700 + idx
+    options = {
+      tooltip = { mode = "single", sort = "none" }
+      legend  = { displayMode = "list", placement = "bottom" }
+    }
+    targets = [{
+      alias      = "error rate"
+      datasource = { type = "testdata", uid = "grafana-testdata-datasource" }
+      refId      = "A"
+      scenarioId = "random_walk"
+      startValue = s.current_error_pct
+      min        = 0
+      max        = s.error_rate_threshold_pct * 2.5
+    }]
+    title = "${s.name} - Error Rate Over Time (Alert: >${s.error_rate_threshold_pct}%)"
+    type  = "timeseries"
+  })]
+
+  _ts_tps_panel_jsons = [for idx, s in local.service_reliability : jsonencode({
+    alert = {
+      alertRuleTags = {}
+      conditions = [{
+        evaluator = { params = [2500], type = "lt" }
+        operator  = { type = "and" }
+        query     = { params = ["A", "5m", "now"] }
+        reducer   = { params = [], type = "last" }
+        type      = "query"
+      }]
+      executionErrorState = "alerting"
+      "for"               = "5m"
+      frequency           = "1m"
+      handler             = 1
+      message             = "${s.name} transaction rate has dropped below 80% of the expected baseline TPS. Check runbook: https://runbooks.internal/${var.project_name}/${s.name}/transaction-drop"
+      name                = "${s.name} - Transaction Drop Alert (<80% baseline)"
+      noDataState         = "no_data"
+      notifications       = []
+    }
+    datasource  = { type = "testdata", uid = "grafana-testdata-datasource" }
+    description = "Alert fires when TPS drops below 80% of the expected baseline  |  Runbook: https://runbooks.internal/${var.project_name}/${s.name}/transaction-drop"
+    fieldConfig = {
+      defaults = {
+        color = { mode = "thresholds" }
+        custom = {
+          lineWidth       = 2
+          fillOpacity     = 10
+          pointSize       = 6
+          showPoints      = "always"
+          thresholdsStyle = { mode = "line" }
+        }
+        thresholds = {
+          mode = "absolute"
+          steps = [
+            { color = "red", value = null },
+            { color = "yellow", value = 2500 },
+            { color = "green", value = 4000 }
+          ]
+        }
+        unit = "short"
+        min  = 0
+      }
+      overrides = []
+    }
+    gridPos = { h = 8, w = local.panel_width, x = idx * local.panel_width, y = 64 }
+    id      = 800 + idx
+    options = {
+      tooltip = { mode = "single", sort = "none" }
+      legend  = { displayMode = "list", placement = "bottom" }
+    }
+    targets = [{
+      alias      = "TPS"
+      datasource = { type = "testdata", uid = "grafana-testdata-datasource" }
+      refId      = "A"
+      scenarioId = "random_walk"
+      startValue = s.current_tps
+      min        = 1000
+      max        = 9000
+    }]
+    title = "${s.name} - Transaction Rate Over Time (Alert: <80% baseline)"
+    type  = "timeseries"
+  })]
+
   # Ordered list of all panel JSON strings
   _all_panel_jsons = concat(
     [local._row_slo_json],
@@ -440,7 +641,11 @@ locals {
     local._latency_panel_jsons,
     local._errorrate_panel_jsons,
     [local._row_alerts_json],
-    [local._alerts_text_panel_json]
+    [local._alerts_text_panel_json],
+    [local._row_deployment_alerts_json],
+    local._ts_latency_panel_jsons,
+    local._ts_errorrate_panel_jsons,
+    local._ts_tps_panel_jsons
   )
 
   # Assemble full Grafana dashboard JSON.
@@ -462,7 +667,8 @@ locals {
         { id = "testdata", name = "TestData DB", type = "datasource", version = "1.0.0" },
         { id = "gauge", name = "Gauge", type = "panel", version = "" },
         { id = "stat", name = "Stat", type = "panel", version = "" },
-        { id = "text", name = "Text", type = "panel", version = "" }
+        { id = "text", name = "Text", type = "panel", version = "" },
+        { id = "timeseries", name = "Time series", type = "panel", version = "" }
       ]
       annotations = {
         list = [{
