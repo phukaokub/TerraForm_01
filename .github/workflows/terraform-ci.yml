@@ -26,3 +26,18 @@ jobs:
 
       - name: Terraform Validate
         run: terraform validate
+
+      - name: Terraform Plan (dev)
+        id: plan
+        run: |
+          set -o pipefail
+          terraform plan -no-color -input=false -var-file=envs/dev.tfvars 2>&1 | tee /tmp/tf-plan.txt
+
+      - name: Post Plan to Step Summary
+        if: always()
+        run: |
+          echo "## Terraform Plan — dev environment" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/tf-plan.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
