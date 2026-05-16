@@ -18,7 +18,7 @@ services = [
     health_path              = "/ready"
     retry_count              = 4
     slo_target               = 99.0
-    latency_threshold_ms     = 2000
+    latency_threshold_ms     = 2500
     error_rate_threshold_pct = 5.0
   }
 ]
